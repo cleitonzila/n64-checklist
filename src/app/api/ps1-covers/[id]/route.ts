@@ -26,7 +26,7 @@ export async function GET(
         headers.set('Content-Type', 'image/jpeg');
         headers.set('Cache-Control', 'public, max-age=31536000, immutable');
 
-        return new NextResponse(game.coverData, {
+        return new NextResponse(game.coverData as any as BodyInit, {
             status: 200,
             headers,
         });
