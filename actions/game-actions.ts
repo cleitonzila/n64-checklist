@@ -38,7 +38,8 @@ export async function toggleGameOwnership(gameId: string, currentStatus: boolean
 
 export async function getCollectionStats() {
   const session = await auth();
-  const userId = session?.user?.id;
+  // If no user is logged in, use the Admin ID to show the public collection stats
+  const userId = session?.user?.id || ADMIN_USER_ID;
 
   if (!userId) {
     return {
@@ -133,7 +134,8 @@ async function getN64Games({
   sort = 'title'
 }: GetGamesParams) {
   const session = await auth();
-  const userId = session?.user?.id;
+  // Public users see Admin's collection
+  const userId = session?.user?.id || ADMIN_USER_ID;
   const skip = (page - 1) * limit;
 
   // Filtro
@@ -241,7 +243,8 @@ async function getPS1Games({
   sort = 'title'
 }: GetGamesParams) {
   const session = await auth();
-  const userId = session?.user?.id;
+  // Public users see Admin's collection
+  const userId = session?.user?.id || ADMIN_USER_ID;
 
   const skip = (page - 1) * limit;
 
