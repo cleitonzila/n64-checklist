@@ -319,7 +319,7 @@ async function getPS1Games({
   games.forEach((game: any) => {
     const entry = groupedMap.get(game.title);
     if (entry) {
-      if (!entry.coverPath && game.coverPath) entry.coverPath = game.coverPath;
+      if (!entry.coverPath && game.coverPath) entry.coverPath = `/api/ps1-covers/${game.id}`;
       entry.variants.push({
         id: game.id,
         serial: game.serial,

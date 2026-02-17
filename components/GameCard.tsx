@@ -17,12 +17,13 @@ export function GameCard({ game, isOwned = false, isEditable = false }: { game: 
 
   return (
     <div className={`card ${optimisticOwned ? 'bg-green-100' : 'bg-gray-100'}`}>
-      <img src={game.imageUrl} alt={game.titleEn} />
-      <h3>{game.titleEn}</h3>
-      <p className="text-sm text-gray-500">{game.titleJp}</p>
-      <button onClick={handleToggle} disabled={!isEditable}>
-        {optimisticOwned ? 'Possuído' : (isEditable ? 'Marcar' : 'Não tenho')}
-      </button>
+      <img src={game.coverPath || '/placeholder_cover.svg'} alt={game.title} className="w-full h-48 object-cover rounded-t-lg" />
+      <div className="p-4">
+        <h3 className="text-lg font-bold mb-2">{game.title}</h3>
+        <button onClick={handleToggle} disabled={!isEditable} className="w-full py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50">
+          {optimisticOwned ? 'Possuído' : (isEditable ? 'Marcar' : 'Não tenho')}
+        </button>
+      </div>
     </div>
   );
 }

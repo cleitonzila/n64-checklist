@@ -48,6 +48,7 @@ model Game {
   coverPath   String?   @map("cover_path")
   sourceUrl   String?   @map("source_url")
   region      Region
+  coverData   Bytes?    @map("cover_data")
   createdAt   DateTime  @default(now()) @map("created_at")
   updatedAt   DateTime  @updatedAt @map("updated_at")
 

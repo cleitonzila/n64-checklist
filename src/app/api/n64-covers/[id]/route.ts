@@ -14,9 +14,8 @@ export async function GET(
         });
 
         if (!game || !game.cover_data) {
-            return new NextResponse('Not Found', { status: 404 });
+            return NextResponse.redirect(new URL('/placeholder_cover.svg', request.url));
         }
-
         return new NextResponse(game.cover_data, {
             headers: {
                 'Content-Type': 'image/jpeg',
