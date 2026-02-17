@@ -1,0 +1,36 @@
+generator client {
+  provider        = "prisma-client-js"
+  output          = "../node_modules/@prisma/client-n64"
+  previewFeatures = ["driverAdapters"]
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Game {
+  id          String   @id
+  cover_path  String?
+  created_at  DateTime @default(now())
+  developer   String?
+  publisher   String?
+  release_jp  String?
+  release_na  String?
+  release_pal String?
+  title       String
+  cover_data  Bytes?
+
+  owners      UserGame[]
+}
+
+model UserGame {
+  userId  String   @map("user_id")
+  gameId  String   @map("game_id")
+  owned   Boolean  @default(true)
+  addedAt DateTime @default(now()) @map("added_at")
+
+  game Game @relation(fields: [gameId], references: [id], onDelete: Cascade)
+
+  @@id([userId, gameId])
+  @@map("users_to_games")
+}

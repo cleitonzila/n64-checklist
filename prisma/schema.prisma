@@ -1,0 +1,85 @@
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["driverAdapters"]
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Console {
+  N64
+  PS1
+}
+
+enum Region {
+  U
+  J
+  P
+}
+
+enum FriendshipStatus {
+  PENDING
+  ACCEPTED
+}
+
+model User {
+  id           String       @id @default(uuid())
+  username     String       @unique
+  passwordHash String       @map("password_hash")
+  createdAt    DateTime     @default(now()) @map("created_at")
+  
+  // Relações
+  collection         UserGame[]
+  friendsInitiated   Friendship[] @relation("friendsInitiated")
+  friendsReceived    Friendship[] @relation("friendsReceived")
+
+  @@map("users")
+}
+
+model Game {
+  id          String    @id @default(uuid())
+  title       String
+  titleJp     String?   @map("title_jp")
+  console     Console   @default(PS1)
+  serial      String    @unique
+  releaseDate String?   @map("release_date")
+  releaseYear Int?      @map("release_year")
+  coverPath   String?   @map("cover_path")
+  sourceUrl   String?   @map("source_url")
+  region      Region
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  // Relações
+  owners      UserGame[]
+
+  @@index([title])
+  @@index([releaseYear])
+  @@map("games")
+}
+
+model UserGame {
+  userId  String   @map("user_id")
+  gameId  String   @map("game_id")
+  owned   Boolean  @default(true)
+  addedAt DateTime @default(now()) @map("added_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  game Game @relation(fields: [gameId], references: [id], onDelete: Cascade)
+
+  @@id([userId, gameId])
+  @@map("users_to_games")
+}
+
+model Friendship {
+  userId1 String           @map("user_id_1")
+  userId2 String           @map("user_id_2")
+  status  FriendshipStatus @default(PENDING)
+
+  user1 User @relation("friendsInitiated", fields: [userId1], references: [id], onDelete: Cascade)
+  user2 User @relation("friendsReceived", fields: [userId2], references: [id], onDelete: Cascade)
+
+  @@id([userId1, userId2])
+  @@map("friendships")
+}
