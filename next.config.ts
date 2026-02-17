@@ -6,7 +6,6 @@ const nextConfig: NextConfig = {
   images: {
     formats: ['image/avif', 'image/webp'],
   },
-  serverExternalPackages: ['@prisma/client', '@prisma/client-n64', '@prisma/adapter-neon'],
 };
 
 export default nextConfig;

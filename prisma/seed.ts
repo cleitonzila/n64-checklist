@@ -1,22 +1,14 @@
 import 'dotenv/config';
 import { PrismaClient } from '@prisma/client';
-import { neonConfig } from '@neondatabase/serverless';
-import { PrismaNeon } from '@prisma/adapter-neon';
-import ws from 'ws';
 import fs from 'fs';
 import path from 'path';
 
-// Configure WebSocket for Node.js environment
-neonConfig.webSocketConstructor = ws;
-
-const connectionString = process.env.DATABASE_URL!;
-const adapter = new PrismaNeon({ connectionString });
-const prisma = new PrismaClient({ adapter });
+const prisma = new PrismaClient();
 
 async function main() {
   // Caminho para o JSON na raiz do projeto
   const dataPath = path.join(process.cwd(), 'ps1_complete_database.json');
-    const games = JSON.parse(fs.readFileSync(dataPath, 'utf-8'));
+  const games = JSON.parse(fs.readFileSync(dataPath, 'utf-8'));
 
   console.log(`Iniciando importação de ${games.length} jogos...`);
 
