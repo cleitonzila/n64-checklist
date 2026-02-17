@@ -1,12 +1,13 @@
 generator client {
   provider        = "prisma-client-js"
-  output          = "../node_modules/@prisma/client-n64"
+  output          = "../node_modules/prisma-n64-client"
   engineType      = "library"
   binaryTargets   = ["native", "rhel-openssl-3.0.x"]
 }
 
 datasource db {
   provider = "postgresql"
+  url      = env("N64_DATABASE_URL")
 }
 
 model Game {

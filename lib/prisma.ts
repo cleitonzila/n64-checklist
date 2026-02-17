@@ -1,6 +1,5 @@
 import { PrismaClient } from '@prisma/client';
-// @ts-ignore
-import { PrismaClient as PrismaClientN64 } from '@prisma/client-n64';
+import { PrismaClient as PrismaClientN64 } from 'prisma-n64-client';
 
 const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined;

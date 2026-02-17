@@ -10,12 +10,11 @@
     "postinstall": "prisma generate && prisma generate --schema=prisma/n64.prisma"
   },
   "dependencies": {
-    "@prisma/client": "^7.3.0",
-    "@prisma/config": "^7.3.0",
+    "@prisma/client": "^6.4.1",
     "bcryptjs": "^3.0.3",
     "next": "16.1.6",
     "next-auth": "^5.0.0-beta.30",
-    "prisma": "^7.3.0",
+    "prisma": "^6.4.1",
     "react": "19.2.3",
     "react-dom": "19.2.3",
     "use-debounce": "^10.1.0",
