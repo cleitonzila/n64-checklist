@@ -350,7 +350,7 @@ async function getPS1Games({
   });
 
   // Fetch Ownership
-  const gameIds = games.map(g => g.id);
+  const gameIds = games.map((g: any) => g.id);
   const ownedGames = await prisma.userGame.findMany({
     where: {
       userId,
