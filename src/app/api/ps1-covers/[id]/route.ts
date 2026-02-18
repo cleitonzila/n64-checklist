@@ -11,10 +11,10 @@ export async function GET(
 
         const game = await prismaPs1.game.findUnique({
             where: { id },
-            select: { coverData: true },
+            select: { cover_data: true },
         });
 
-        if (!game || !game.coverData) {
+        if (!game || !game.cover_data) {
             // Fallback for games without cover
             return NextResponse.redirect(new URL('/placeholder_cover.svg', request.url));
         }
@@ -26,7 +26,7 @@ export async function GET(
         headers.set('Content-Type', 'image/jpeg');
         headers.set('Cache-Control', 'public, max-age=31536000, immutable');
 
-        return new NextResponse(game.coverData as any as BodyInit, {
+        return new NextResponse(game.cover_data as any as BodyInit, {
             status: 200,
             headers,
         });

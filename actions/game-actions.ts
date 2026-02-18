@@ -2,7 +2,7 @@
 import { auth } from '../auth';
 import { prisma, prismaPs1, prismaN64 } from '../lib/prisma';
 import { revalidatePath } from 'next/cache';
-import { Console } from '@prisma/client'; // Import Enum from Auth Client
+import { Console } from '@prisma/client';
 
 // Hardcoded Admin ID for public view
 const ADMIN_USER_ID = '1a5ab17f-d3de-4b43-84ef-de49c1b54a45';
@@ -74,24 +74,9 @@ export async function getCollectionStats() {
   }
 
   // PS1 Stats
-  // Total games from PS1 DB
-  // Group by title for accurate "unique games" count (variants handling)
-  // But wait, ps1.prisma Game model still has 'title' and duplicates handle variants via serial?
-  // Let's count distinct titles for "Total Games" concept, or just total items?
-  // Original implementation grouped by title.
-
-  const ps1TotalGrouped = await prismaPs1.game.groupBy({
-    by: ['title'],
-  });
-  const ps1Total = ps1TotalGrouped.length;
-
-  // Owned PS1 Games (from Auth DB)
+  const ps1Total = await prismaPs1.game.count();
   const ps1OwnedCount = await prisma.userGame.count({
-    where: {
-      userId,
-      owned: true,
-      console: 'PS1'
-    },
+    where: { userId, owned: true, console: 'PS1' },
   });
 
   // N64 Stats
@@ -280,77 +265,34 @@ async function getPS1Games({
   page = 1,
   limit = 25,
   search = '',
-  region = 'all',
   sort = 'title'
 }: GetGamesParams) {
   const session = await auth();
   const userId = session?.user?.id || ADMIN_USER_ID;
-
   const skip = (page - 1) * limit;
 
-  // Filter for PS1 DB
-  // Ps1 filter logic was slightly different (OR search title/serial)
-  // And it grouped by title in DB to handle pagination of TITLES (not game entries).
-
-  // Typecasting prismaPs1 as any to avoid complex type errors during refactor if generated types aren't perfect yet
-  // But we should try to use real types.
-
-  const where: any = {
-    console: 'PS1',
-    OR: search
-      ? [
-        { title: { contains: search, mode: 'insensitive' } },
-        { serial: { contains: search, mode: 'insensitive' } },
-      ]
-      : undefined,
-  };
-
-  if (region === 'USA') where.region = { equals: 'U' };
-  else if (region === 'JPN') where.region = { equals: 'J' };
-  else if (region === 'EUR') where.region = { equals: 'P' };
-
-  let orderByGroupBy: any | undefined;
-
-  if (sort === 'year_desc') {
-    orderByGroupBy = { _min: { releaseYear: 'desc' } };
-  } else if (sort === 'year_asc') {
-    orderByGroupBy = { _min: { releaseYear: 'asc' } };
-  } else {
-    orderByGroupBy = { title: 'asc' };
+  const where: any = {};
+  if (search) {
+    where.title = { contains: search, mode: 'insensitive' };
   }
 
-  // Group by title to paginate unique titles
-  const distinctGroups = await (prismaPs1.game as any).groupBy({
-    by: ['title'], // Removed 'console' from groupBy as it is constant 'PS1' in where
+  // Count Total
+  const total = await prismaPs1.game.count({ where });
+
+  // Fetch Games
+  let allGames = await prismaPs1.game.findMany({
     where,
-    _min: {
-      releaseYear: true,
-    },
-    orderBy: orderByGroupBy,
-    skip,
-    take: limit,
+    select: {
+      id: true,
+      title: true,
+      release_na: true,
+      release_jp: true,
+      release_pal: true,
+    }
   });
 
-  const titleList: string[] = distinctGroups.map((g: any) => g.title);
-
-  const totalGrouped = await (prismaPs1.game as any).groupBy({
-    by: ['title'],
-    where,
-    _count: { title: true },
-  });
-  const total = totalGrouped.length;
-
-  const games = await (prismaPs1.game as any).findMany({
-    where: {
-      title: { in: titleList },
-      console: 'PS1',
-    },
-    orderBy: { region: 'asc' },
-    // No include owners!
-  });
-
-  // Fetch Ownership
-  const gameIds = games.map((g: any) => g.id);
+  // Fetch Ownership from Auth DB
+  const gameIds = allGames.map((g: any) => g.id);
   const ownedGames = await prisma.userGame.findMany({
     where: {
       userId,
@@ -362,39 +304,66 @@ async function getPS1Games({
   });
   const ownedSet = new Set(ownedGames.map(ug => ug.gameId));
 
-  const groupedMap = new Map<string, GroupedGame>();
+  const parseDate = (dateStr: string | null) => {
+    if (!dateStr || dateStr.toLowerCase().includes('unreleased')) return null;
+    const date = new Date(dateStr);
+    return isNaN(date.getTime()) ? null : date;
+  };
 
-  titleList.forEach((t: string) => {
-    groupedMap.set(t, {
-      title: t,
-      coverPath: null,
-      variants: []
-    });
-  });
+  let formattedGames = allGames.map((game: any) => {
+    const dates = [
+      parseDate(game.release_na),
+      parseDate(game.release_jp),
+      parseDate(game.release_pal)
+    ].filter((d: any) => d !== null) as Date[];
 
-  games.forEach((game: any) => {
-    const entry = groupedMap.get(game.title);
-    if (entry) {
-      if (!entry.coverPath && game.coverPath) entry.coverPath = `/api/ps1-covers/${game.id}`;
-      entry.variants.push({
+    const earliestDate = dates.length > 0 ? new Date(Math.min(...dates.map((d: any) => d.getTime()))) : null;
+
+    return {
+      title: game.title,
+      coverPath: `/api/ps1-covers/${game.id}`,
+      release_na: game.release_na,
+      release_jp: game.release_jp,
+      release_pal: game.release_pal,
+      earliestDate: earliestDate,
+      variants: [{
         id: game.id,
-        serial: game.serial,
-        region: game.region,
-        console: game.console,
-        releaseYear: game.releaseYear,
+        serial: 'PS1',
+        region: 'U',
+        console: 'PS1',
+        releaseYear: earliestDate ? earliestDate.getFullYear() : null,
         owned: ownedSet.has(game.id)
-      });
-    }
+      }]
+    };
   });
 
-  const formattedGames = Array.from(groupedMap.values());
+  // Sorting
+  if (sort === 'year_desc') {
+    formattedGames.sort((a: any, b: any) => {
+      if (!a.earliestDate && !b.earliestDate) return 0;
+      if (!a.earliestDate) return 1;
+      if (!b.earliestDate) return -1;
+      return b.earliestDate.getTime() - a.earliestDate.getTime();
+    });
+  } else if (sort === 'year_asc') {
+    formattedGames.sort((a: any, b: any) => {
+      if (!a.earliestDate && !b.earliestDate) return 0;
+      if (!a.earliestDate) return 1;
+      if (!b.earliestDate) return -1;
+      return a.earliestDate.getTime() - b.earliestDate.getTime();
+    });
+  } else {
+    formattedGames.sort((a: any, b: any) => a.title.localeCompare(b.title));
+  }
+
+  const paginatedGames = formattedGames.slice(skip, skip + limit);
 
   return {
-    games: formattedGames,
+    games: paginatedGames,
     metadata: {
-      total,
       page,
       limit,
+      total,
       totalPages: Math.ceil(total / limit),
     },
   };
