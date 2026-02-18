@@ -1,5 +1,5 @@
 import 'dotenv/config';
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient } from 'prisma-ps1-client';
 import fs from 'fs';
 import path from 'path';
 
