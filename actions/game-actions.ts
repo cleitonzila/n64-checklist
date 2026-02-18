@@ -140,7 +140,7 @@ export async function getGames(params: GetGamesParams) {
 
 async function getN64Games({
   page = 1,
-  limit = 25,
+  limit = 18,
   search = '',
   sort = 'title'
 }: GetGamesParams) {
@@ -263,7 +263,7 @@ async function getN64Games({
 
 async function getPS1Games({
   page = 1,
-  limit = 25,
+  limit = 18,
   search = '',
   sort = 'title'
 }: GetGamesParams) {
