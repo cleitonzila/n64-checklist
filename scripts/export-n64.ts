@@ -1,16 +1,10 @@
 // @ts-nocheck
 import 'dotenv/config';
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient } from 'prisma-n64-client';
 import fs from 'fs/promises';
 import path from 'path';
 
-const prisma = new PrismaClient({
-    datasources: {
-        db: {
-            url: process.env.DATABASE_URL,
-        },
-    },
-});
+const prisma = new PrismaClient();
 
 async function main() {
     console.log('Fetching N64 games...');
