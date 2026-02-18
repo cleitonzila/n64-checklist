@@ -6,7 +6,7 @@ generator client {
 
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL")
+  url      = env("AUTH_DATABASE_URL")
 }
 
 enum Console {
@@ -39,39 +39,16 @@ model User {
   @@map("users")
 }
 
-model Game {
-  id          String    @id @default(uuid())
-  title       String
-  titleJp     String?   @map("title_jp")
-  console     Console   @default(PS1)
-  serial      String    @unique
-  releaseDate String?   @map("release_date")
-  releaseYear Int?      @map("release_year")
-  coverPath   String?   @map("cover_path")
-  sourceUrl   String?   @map("source_url")
-  region      Region
-  coverData   Bytes?    @map("cover_data")
-  createdAt   DateTime  @default(now()) @map("created_at")
-  updatedAt   DateTime  @updatedAt @map("updated_at")
-
-  // Relações
-  owners      UserGame[]
-
-  @@index([title])
-  @@index([releaseYear])
-  @@map("games")
-}
-
 model UserGame {
   userId  String   @map("user_id")
   gameId  String   @map("game_id")
+  console Console  @default(PS1)
   owned   Boolean  @default(true)
   addedAt DateTime @default(now()) @map("added_at")
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-  game Game @relation(fields: [gameId], references: [id], onDelete: Cascade)
 
-  @@id([userId, gameId])
+  @@id([userId, gameId, console])
   @@map("users_to_games")
 }
 

@@ -1,0 +1,42 @@
+generator client {
+  provider        = "prisma-client-js"
+  output          = "../node_modules/prisma-ps1-client"
+  engineType      = "library"
+  binaryTargets   = ["native", "rhel-openssl-3.0.x"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("PS1_DATABASE_URL")
+}
+
+enum Console {
+  N64
+  PS1
+}
+
+enum Region {
+  U
+  J
+  P
+}
+
+model Game {
+  id          String    @id @default(uuid())
+  title       String
+  titleJp     String?   @map("title_jp")
+  console     Console   @default(PS1)
+  serial      String    @unique
+  releaseDate String?   @map("release_date")
+  releaseYear Int?      @map("release_year")
+  coverPath   String?   @map("cover_path")
+  sourceUrl   String?   @map("source_url")
+  region      Region
+  coverData   Bytes?    @map("cover_data")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  @@index([title])
+  @@index([releaseYear])
+  @@map("games")
+}

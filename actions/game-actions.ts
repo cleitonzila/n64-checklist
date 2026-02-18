@@ -1,39 +1,64 @@
 'use server';
 import { auth } from '../auth';
-import { prisma, prismaN64 } from '../lib/prisma';
+import { prisma, prismaPs1, prismaN64 } from '../lib/prisma';
 import { revalidatePath } from 'next/cache';
-import { Prisma } from '@prisma/client';
+import { Console } from '@prisma/client'; // Import Enum from Auth Client
 
 // Hardcoded Admin ID for public view
 const ADMIN_USER_ID = '1a5ab17f-d3de-4b43-84ef-de49c1b54a45';
 
-export async function toggleGameOwnership(gameId: string, currentStatus: boolean, console: string = 'PS1') {
+export async function toggleGameOwnership(gameId: string, currentStatus: boolean, consoleType: string = 'PS1') {
   const session = await auth();
   if (!session?.user?.id) throw new Error('Unauthorized');
 
   const userId = session.user.id;
-  const targetPrisma = console === 'N64' ? prismaN64 : prisma;
+  // Ownership is ALWAYS in Auth DB (prisma), regardless of console
+  // We identify the game by ID + Console
+
+  // Map string to Enum
+  const consoleEnum = consoleType === 'N64' ? Console.N64 : Console.PS1;
 
   if (currentStatus) {
-    // Se já tem, remove
-    await targetPrisma.userGame.deleteMany({
+    // Remove ownership
+    await prisma.userGame.deleteMany({
       where: {
         userId: userId,
         gameId: gameId,
+        console: consoleEnum
       },
     });
   } else {
-    // Se não tem, adiciona
-    await targetPrisma.userGame.create({
-      data: {
-        userId,
-        gameId,
-        owned: true,
-      },
+    // Add ownership
+    // Use upsert to be safe or deleteMany then create? create is fine if PK is composite
+    // But safely, let's use create. If it exists, it might error if we didn't check.
+    // The UI state suggests it's not owned.
+    // We can use upsert on the composite ID if prisma supports it easily, or just create.
+    // With @@id([userId, gameId, console]), create will fail if exists.
+
+    // Check if exists first? Or just try create.
+    const existing = await prisma.userGame.findUnique({
+      where: {
+        userId_gameId_console: {
+          userId,
+          gameId,
+          console: consoleEnum
+        }
+      }
     });
+
+    if (!existing) {
+      await prisma.userGame.create({
+        data: {
+          userId,
+          gameId,
+          console: consoleEnum,
+          owned: true,
+        },
+      });
+    }
   }
 
-  revalidatePath('/'); // Atualiza a UI da home
+  revalidatePath('/');
 }
 
 export async function getCollectionStats() {
@@ -49,32 +74,33 @@ export async function getCollectionStats() {
   }
 
   // PS1 Stats
-  // We need to group by title to get accurate "unique games" count, as getPS1Games does
-  // But for simple stats, counting distinct titles is enough?
-  // getPS1Games groups by title and console.
-  // Let's do a simple count for now, or distinct count if possible.
-  // Prisma groupBy is good.
+  // Total games from PS1 DB
+  // Group by title for accurate "unique games" count (variants handling)
+  // But wait, ps1.prisma Game model still has 'title' and duplicates handle variants via serial?
+  // Let's count distinct titles for "Total Games" concept, or just total items?
+  // Original implementation grouped by title.
 
-  const ps1TotalGrouped = await prisma.game.groupBy({
+  const ps1TotalGrouped = await prismaPs1.game.groupBy({
     by: ['title'],
-    where: { console: 'PS1' },
   });
   const ps1Total = ps1TotalGrouped.length;
 
+  // Owned PS1 Games (from Auth DB)
   const ps1OwnedCount = await prisma.userGame.count({
     where: {
       userId,
       owned: true,
-      game: { console: 'PS1' } // Ensure we count only PS1 games in this DB
+      console: 'PS1'
     },
   });
 
   // N64 Stats
   const n64Total = await prismaN64.game.count();
-  const n64Owned = await prismaN64.userGame.count({
+  const n64Owned = await prisma.userGame.count({
     where: {
       userId,
       owned: true,
+      console: 'N64'
     },
   });
 
@@ -134,20 +160,19 @@ async function getN64Games({
   sort = 'title'
 }: GetGamesParams) {
   const session = await auth();
-  // Public users see Admin's collection
   const userId = session?.user?.id || ADMIN_USER_ID;
   const skip = (page - 1) * limit;
 
-  // Filtro
+  // Filter for N64 DB
   const where: any = {};
   if (search) {
     where.title = { contains: search, mode: 'insensitive' };
   }
 
-  // Contagem Total
+  // Count Total
   const total = await prismaN64.game.count({ where });
 
-  // Buscar Jogos
+  // Fetch Games
   let allGames = await prismaN64.game.findMany({
     where,
     select: {
@@ -156,11 +181,22 @@ async function getN64Games({
       release_na: true,
       release_jp: true,
       release_pal: true,
-      owners: userId ? {
-        where: { userId }
-      } : undefined
+      // No owners relation here!
     }
   });
+
+  // Fetch Ownership from Auth DB for these games
+  const gameIds = allGames.map(g => g.id);
+  const ownedGames = await prisma.userGame.findMany({
+    where: {
+      userId,
+      console: 'N64',
+      gameId: { in: gameIds },
+      owned: true
+    },
+    select: { gameId: true }
+  });
+  const ownedSet = new Set(ownedGames.map(ug => ug.gameId));
 
   const parseDate = (dateStr: string | null) => {
     if (!dateStr || dateStr.toLowerCase().includes('unreleased')) return null;
@@ -168,7 +204,7 @@ async function getN64Games({
     return isNaN(date.getTime()) ? null : date;
   };
 
-  // Mapear e calcular data mínima para ordenação
+  // Map and calculate
   let formattedGames = allGames.map((game: any) => {
     const dates = [
       parseDate(game.release_na),
@@ -178,7 +214,6 @@ async function getN64Games({
 
     const earliestDate = dates.length > 0 ? new Date(Math.min(...dates.map(d => d.getTime()))) : null;
 
-    // Determine region based on release dates priority
     let region = 'U';
     if (!game.release_na && game.release_jp) region = 'J';
     else if (!game.release_na && !game.release_jp && game.release_pal) region = 'P';
@@ -196,12 +231,20 @@ async function getN64Games({
         region: region,
         console: 'N64',
         releaseYear: earliestDate ? earliestDate.getFullYear() : null,
-        owned: userId ? (game.owners.length > 0 ? game.owners[0].owned : false) : false
+        owned: ownedSet.has(game.id)
       }]
     };
   });
 
-  // Ordenação customizada
+  // Sorting (in memory because variants logic is complex or unrelated to DB sort)
+  // Wait, if pagination is applied AFTER sort, we must sort all?
+  // Previous implementation: get ALL matching games, then map, sort, slice.
+  // Wait, previous implementation fetched allGames?
+  // Let's check previous code.
+  // Yes: `let allGames = await prismaN64.game.findMany({...})`. It fetched ALL matches of search?
+  // Then sliced in memory: `const paginatedGames = formattedGames.slice(skip, skip + limit);`
+  // This is inefficient for large datasets but N64 library is small (~300 games). Acceptable.
+
   if (sort === 'year_desc') {
     formattedGames.sort((a: any, b: any) => {
       if (!a.earliestDate && !b.earliestDate) return 0;
@@ -217,11 +260,9 @@ async function getN64Games({
       return a.earliestDate.getTime() - b.earliestDate.getTime();
     });
   } else {
-    // Default title sort
     formattedGames.sort((a: any, b: any) => a.title.localeCompare(b.title));
   }
 
-  // Paginação em memória
   const paginatedGames = formattedGames.slice(skip, skip + limit);
 
   return {
@@ -229,7 +270,7 @@ async function getN64Games({
     metadata: {
       page,
       limit,
-      total,
+      total, // This total might be slightly off if findMany returned fewer? No, count matches findMany where.
       totalPages: Math.ceil(total / limit),
     },
   };
@@ -243,13 +284,18 @@ async function getPS1Games({
   sort = 'title'
 }: GetGamesParams) {
   const session = await auth();
-  // Public users see Admin's collection
   const userId = session?.user?.id || ADMIN_USER_ID;
 
   const skip = (page - 1) * limit;
 
-  // 1. Filtro base
-  const where: Prisma.GameWhereInput = {
+  // Filter for PS1 DB
+  // Ps1 filter logic was slightly different (OR search title/serial)
+  // And it grouped by title in DB to handle pagination of TITLES (not game entries).
+
+  // Typecasting prismaPs1 as any to avoid complex type errors during refactor if generated types aren't perfect yet
+  // But we should try to use real types.
+
+  const where: any = {
     console: 'PS1',
     OR: search
       ? [
@@ -263,7 +309,7 @@ async function getPS1Games({
   else if (region === 'JPN') where.region = { equals: 'J' };
   else if (region === 'EUR') where.region = { equals: 'P' };
 
-  let orderByGroupBy: Prisma.Enumerable<Prisma.GameOrderByWithAggregationInput> | undefined;
+  let orderByGroupBy: any | undefined;
 
   if (sort === 'year_desc') {
     orderByGroupBy = { _min: { releaseYear: 'desc' } };
@@ -273,41 +319,48 @@ async function getPS1Games({
     orderByGroupBy = { title: 'asc' };
   }
 
-  const distinctGroups = await (prisma.game as any).groupBy({
-    by: ['title', 'console'],
+  // Group by title to paginate unique titles
+  const distinctGroups = await (prismaPs1.game as any).groupBy({
+    by: ['title'], // Removed 'console' from groupBy as it is constant 'PS1' in where
     where,
     _min: {
       releaseYear: true,
     },
-    orderBy: orderByGroupBy as any,
+    orderBy: orderByGroupBy,
     skip,
     take: limit,
   });
 
   const titleList: string[] = distinctGroups.map((g: any) => g.title);
 
-  const totalGrouped = await (prisma.game as any).groupBy({
-    by: ['title', 'console'],
+  const totalGrouped = await (prismaPs1.game as any).groupBy({
+    by: ['title'],
     where,
     _count: { title: true },
   });
   const total = totalGrouped.length;
 
-  const games = await (prisma.game as any).findMany({
+  const games = await (prismaPs1.game as any).findMany({
     where: {
       title: { in: titleList },
       console: 'PS1',
     },
     orderBy: { region: 'asc' },
-    include: {
-      owners: userId
-        ? {
-          where: { userId },
-          select: { owned: true },
-        }
-        : false,
-    },
+    // No include owners!
   });
+
+  // Fetch Ownership
+  const gameIds = games.map(g => g.id);
+  const ownedGames = await prisma.userGame.findMany({
+    where: {
+      userId,
+      console: 'PS1',
+      gameId: { in: gameIds },
+      owned: true
+    },
+    select: { gameId: true }
+  });
+  const ownedSet = new Set(ownedGames.map(ug => ug.gameId));
 
   const groupedMap = new Map<string, GroupedGame>();
 
@@ -329,7 +382,7 @@ async function getPS1Games({
         region: game.region,
         console: game.console,
         releaseYear: game.releaseYear,
-        owned: userId ? (game.owners.length > 0 ? game.owners[0].owned : false) : false
+        owned: ownedSet.has(game.id)
       });
     }
   });

@@ -10,6 +10,7 @@ datasource db {
   url      = env("N64_DATABASE_URL")
 }
 
+
 model Game {
   id          String   @id
   cover_path  String?
@@ -21,18 +22,4 @@ model Game {
   release_pal String?
   title       String
   cover_data  Bytes?
-
-  owners      UserGame[]
-}
-
-model UserGame {
-  userId  String   @map("user_id")
-  gameId  String   @map("game_id")
-  owned   Boolean  @default(true)
-  addedAt DateTime @default(now()) @map("added_at")
-
-  game Game @relation(fields: [gameId], references: [id], onDelete: Cascade)
-
-  @@id([userId, gameId])
-  @@map("users_to_games")
 }
