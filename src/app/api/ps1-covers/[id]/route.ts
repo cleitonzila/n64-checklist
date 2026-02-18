@@ -1,5 +1,5 @@
 
-import { prisma } from '../../../../../lib/prisma';
+import { prismaPs1 } from '../../../../../lib/prisma';
 import { NextResponse } from 'next/server';
 
 export async function GET(
@@ -9,7 +9,7 @@ export async function GET(
     try {
         const { id } = await params;
 
-        const game = await prisma.game.findUnique({
+        const game = await prismaPs1.game.findUnique({
             where: { id },
             select: { coverData: true },
         });

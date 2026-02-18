@@ -16,7 +16,7 @@ export async function GET(
         if (!game || !game.cover_data) {
             return NextResponse.redirect(new URL('/placeholder_cover.svg', request.url));
         }
-        return new NextResponse(game.cover_data, {
+        return new NextResponse(game.cover_data as any as BodyInit, {
             headers: {
                 'Content-Type': 'image/jpeg',
                 'Cache-Control': 'public, max-age=31536000, immutable',
