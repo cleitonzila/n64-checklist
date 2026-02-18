@@ -6,26 +6,24 @@ import path from 'path';
 const prisma = new PrismaClient();
 
 async function main() {
-  // Caminho para o JSON na raiz do projeto
   const dataPath = path.join(process.cwd(), 'ps1_complete_database.json');
   const games = JSON.parse(fs.readFileSync(dataPath, 'utf-8'));
 
   console.log(`Iniciando importação de ${games.length} jogos...`);
 
-  // Usamos um loop simples para o Neon não derrubar a conexão por excesso de requests
   for (const game of games) {
     await prisma.game.upsert({
-      where: { serial: game.serial },
+      where: { id: game.id || game.serial },
       update: {},
       create: {
+        id: game.id || game.serial,
         title: game.title,
-        serial: game.serial,
-        releaseDate: game.date,
-        releaseYear: game.year !== "N/A" ? parseInt(game.year) : null,
-        coverPath: game.cover_path,
-        sourceUrl: game.url,
-        region: game.url.includes('/U/') ? 'U' : game.url.includes('/J/') ? 'J' : 'P',
-        console: 'PS1'
+        developer: game.developer || null,
+        publisher: game.publisher || null,
+        release_jp: game.release_jp || game.date || null,
+        release_na: game.release_na || null,
+        release_pal: game.release_pal || null,
+        cover_path: game.cover_path || null,
       },
     });
   }
